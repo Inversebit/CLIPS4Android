@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,7 +15,6 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
@@ -77,20 +77,61 @@ public class MainActivity extends Activity implements NextStateListener {
 	ExpertSystem animalsExpertSystem;
 	ExpertTaskFactory taskFactory;
 	
+	static final String appRootDirectory = "/clipsDemo";
 	
 	private String getResourceString(String label) {
 		return getString( getResources().getIdentifier( label, "string", getBaseContext().getPackageName() ) );
 	}
-	
-	private String getRealFilePath(String filepath) throws FileNotFoundException {
+		
+	private void createRootDirectoryIfDoesNotExist() throws FileNotFoundException {
 		final String state = android.os.Environment.getExternalStorageState();
 		if( android.os.Environment.MEDIA_MOUNTED.equals(state) ) {
 			// get the directory of the triple store
 			final File topDir = android.os.Environment.getExternalStorageDirectory();
-			final String realpath = topDir.getAbsolutePath() + filepath;
+			final String realpath = topDir.getAbsolutePath() + MainActivity.appRootDirectory;
 			final File file = new File(realpath);
-			if( !file.exists() )
-				throw new FileNotFoundException("The file " + realpath + " doesn't exist in the external storage.");
+			if( !file.exists() ) {
+				file.mkdirs(); // it creates parent folders too
+			}
+		} else throw new FileNotFoundException("The external storage is not mounted.");
+	}
+	
+	private String getRealFilePathCreatingIfDoesNotExist(String filename) throws IOException {
+		final String state = android.os.Environment.getExternalStorageState();
+		if( android.os.Environment.MEDIA_MOUNTED.equals(state) ) {
+			// get the directory of the triple store
+			final File topDir = android.os.Environment.getExternalStorageDirectory();
+			final String realpath = topDir.getAbsolutePath() + MainActivity.appRootDirectory + "/" + filename;
+			final File file = new File(realpath);
+			if( !file.exists() ) {
+				try {
+					file.createNewFile();
+				} catch (IOException e) {
+					throw new FileNotFoundException("The unexisting file '" + realpath + "' could not be created");
+				}
+				
+				InputStream input;
+				try {
+					input = getResources().getAssets().open(filename);
+				} catch (IOException e) {
+					throw new FileNotFoundException("That's weird, the file '" + filename + "' is not available as an asset.");
+				}
+				
+				final OutputStream output = new FileOutputStream(file);
+				
+				try {
+					final byte[] buffer = new byte[1024]; // Adjust if you want
+				    int bytesRead;
+				    while ((bytesRead = input.read(buffer)) != -1) {
+				        output.write(buffer, 0, bytesRead);
+				    }
+				} catch (IOException e) {
+					throw new IOException("Not able to write the file '" + realpath + "'.");
+				} finally {
+					output.close();
+				}
+			}
+			// At this point, if it didn't exist, it does now
 			return realpath;
 		}
 		throw new FileNotFoundException("The external storage is not mounted.");
@@ -142,48 +183,24 @@ public class MainActivity extends Activity implements NextStateListener {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
-		generateRuleFileInAppFileDir("bcdemo.clp");
-		generateRuleFileInAppFileDir("animaldemo.clp");
-		
-		final String expertSystemRulesFile = getFilesDir().getAbsolutePath() + "/" + "bcdemo.clp";
-		final String animalsDemoFile = getFilesDir().getAbsolutePath() + "/" + "animaldemo.clp";
-		
-		this.animalsExpertSystem = new ExpertSystem( new String[] {expertSystemRulesFile, animalsDemoFile} );
-		this.animalsExpertSystem.addListener(this);
-		this.animalsExpertSystem.start();
-		this.taskFactory = new ExpertTaskFactory( this.animalsExpertSystem );
-		
-		submitTaskToExpertSystem( this.taskFactory.createRestartTask() );
-	}
-	
-	private void generateRuleFileInAppFileDir(String fileName)
-	{
-		FileOutputStream destinationFileStream = null;
-		InputStream assetsOriginFileStream = null;
-		try{
-			destinationFileStream = openFileOutput(fileName, Context.MODE_PRIVATE);
-			assetsOriginFileStream = getAssets().open(fileName);
+		try {
+			createRootDirectoryIfDoesNotExist();
+			final String expertSystemRulesFile = getRealFilePathCreatingIfDoesNotExist( "bcdemo.clp" );
+			final String animalsDemoFile = getRealFilePathCreatingIfDoesNotExist( "animaldemo.clp" );
 			
-			int aByte;
-			while((aByte = assetsOriginFileStream.read())!=-1){
-				destinationFileStream.write(aByte);
-			}			
+			this.animalsExpertSystem = new ExpertSystem( new String[] {expertSystemRulesFile, animalsDemoFile} );
+			this.animalsExpertSystem.addListener(this);
+			this.animalsExpertSystem.start();
+			this.taskFactory = new ExpertTaskFactory( this.animalsExpertSystem );
+			
+			submitTaskToExpertSystem( this.taskFactory.createRestartTask() );
+		} catch (IOException e) {
+			setEnabledButtons( false, false, false );
+			setLabelText( e.getMessage() );
 		}
-		catch (IOException e){
-			Log.d(ExpertSystem.logLabel, e.getMessage());
-		}
-		finally{
-			try
-			{
-				assetsOriginFileStream.close();
-				destinationFileStream.close();
-			}
-			catch (IOException e){
-				e.printStackTrace();
-			}			
-		}		
 	}
-	
+
+
 	@Override
 	protected void onDestroy() {
 		if( this.animalsExpertSystem != null ) {
