@@ -2,6 +2,9 @@ package eu.deustotech.animalclipsdemo;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,7 +17,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -140,20 +142,46 @@ public class MainActivity extends Activity implements NextStateListener {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
-		try {
-			final String expertSystemRulesFile = getRealFilePath( "/files/bcdemo.clp" );
-			final String animalsDemoFile = getRealFilePath( "/files/animaldemo.clp" );
+		generateRuleFileInAppFileDir("bcdemo.clp");
+		generateRuleFileInAppFileDir("animaldemo.clp");
+		
+		final String expertSystemRulesFile = getFilesDir().getAbsolutePath() + "/" + "bcdemo.clp";
+		final String animalsDemoFile = getFilesDir().getAbsolutePath() + "/" + "animaldemo.clp";
+		
+		this.animalsExpertSystem = new ExpertSystem( new String[] {expertSystemRulesFile, animalsDemoFile} );
+		this.animalsExpertSystem.addListener(this);
+		this.animalsExpertSystem.start();
+		this.taskFactory = new ExpertTaskFactory( this.animalsExpertSystem );
+		
+		submitTaskToExpertSystem( this.taskFactory.createRestartTask() );
+	}
+	
+	private void generateRuleFileInAppFileDir(String fileName)
+	{
+		FileOutputStream destinationFileStream = null;
+		InputStream assetsOriginFileStream = null;
+		try{
+			destinationFileStream = openFileOutput(fileName, Context.MODE_PRIVATE);
+			assetsOriginFileStream = getAssets().open(fileName);
 			
-			this.animalsExpertSystem = new ExpertSystem( new String[] {expertSystemRulesFile, animalsDemoFile} );
-			this.animalsExpertSystem.addListener(this);
-			this.animalsExpertSystem.start();
-			this.taskFactory = new ExpertTaskFactory( this.animalsExpertSystem );
-			
-			submitTaskToExpertSystem( this.taskFactory.createRestartTask() );
-		} catch (FileNotFoundException e) {
-			setEnabledButtons( false, false, false );
-			setLabelText( e.getMessage() );
+			int aByte;
+			while((aByte = assetsOriginFileStream.read())!=-1){
+				destinationFileStream.write(aByte);
+			}			
 		}
+		catch (IOException e){
+			Log.d(ExpertSystem.logLabel, e.getMessage());
+		}
+		finally{
+			try
+			{
+				assetsOriginFileStream.close();
+				destinationFileStream.close();
+			}
+			catch (IOException e){
+				e.printStackTrace();
+			}			
+		}		
 	}
 	
 	@Override
