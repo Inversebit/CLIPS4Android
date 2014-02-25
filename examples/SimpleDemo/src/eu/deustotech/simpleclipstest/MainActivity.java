@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
 		clips.eval("(printout t (+ 3 4))");
 		clips.destroy();
 		
-		generateRuleFileInAppFileDir();
+		generateRuleFileInAppFileDir(FILE_NAME);
 		// Checking that the rule file exists
 		String factsFilePath;
 		try {
@@ -53,13 +53,13 @@ public class MainActivity extends Activity {
 		}
 	}
 
-	private void generateRuleFileInAppFileDir()
+	private void generateRuleFileInAppFileDir(String fileName)
 	{
 		FileOutputStream destinationFileStream = null;
 		InputStream assetsOriginFileStream = null;
 		try{
-			destinationFileStream = openFileOutput(FILE_NAME, Context.MODE_PRIVATE);
-			assetsOriginFileStream = getAssets().open(FILE_NAME);
+			destinationFileStream = openFileOutput(fileName, Context.MODE_PRIVATE);
+			assetsOriginFileStream = getAssets().open(fileName);
 			
 			int aByte;
 			while((aByte = assetsOriginFileStream.read())!=-1){
